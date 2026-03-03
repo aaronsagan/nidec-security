@@ -1,0 +1,80 @@
+<?php
+
+class FinalCheckingModel
+{
+    public function findReportForFinalChecking(string $reportNo): ?array
+    {
+        $row = db_fetch_one(
+            'SELECT id, submitted_by, status, responsible_department_id FROM reports WHERE report_no = ? LIMIT 1',
+            's',
+            [$reportNo]
+        );
+
+        return $row ?: null;
+    }
+
+    public function getReportsAwaitingFinalCheckingForUser(int $userId): array
+    {
+        return db_fetch_all(
+            "SELECT r.report_no, r.subject, r.severity, r.submitted_at, d.name AS department_name
+             FROM reports r
+             JOIN departments d ON d.id = r.responsible_department_id
+             WHERE r.submitted_by = ? AND r.status = 'for_security_final_check'
+             ORDER BY r.submitted_at DESC",
+            'i',
+            [$userId]
+        );
+    }
+
+    public function confirmResolved(int $reportId, int $userId, string $remarks): void
+    {
+        db_execute(
+            "UPDATE reports
+             SET status = 'resolved', current_reviewer = NULL,
+                 resolved_by_security = ?, resolved_at = NOW(), security_remarks = ?
+             WHERE id = ?",
+            'isi',
+            [$userId, $remarks, $reportId]
+        );
+
+        db_execute(
+            "INSERT INTO security_final_checks (report_id, decision, remarks, checked_by, checked_at, closed_at)
+             VALUES (?, 'confirmed', ?, ?, NOW(), NOW())
+             ON DUPLICATE KEY UPDATE decision=VALUES(decision), remarks=VALUES(remarks), checked_by=VALUES(checked_by), checked_at=VALUES(checked_at), closed_at=VALUES(closed_at)",
+            'isi',
+            [$reportId, $remarks, $userId]
+        );
+
+        db_execute(
+            'INSERT INTO report_status_history (report_id, status, changed_by, notes, changed_at) VALUES (?, ?, ?, ?, NOW())',
+            'isis',
+            [$reportId, 'resolved', $userId, $remarks]
+        );
+    }
+
+    public function markNotResolved(int $reportId, int $userId, string $remarks): void
+    {
+        db_execute(
+            "UPDATE reports
+             SET status = 'returned_to_department', current_reviewer = 'department',
+                 returned_by_security = ?, returned_at = NOW(), security_remarks = ?
+             WHERE id = ?",
+            'isi',
+            [$userId, $remarks, $reportId]
+        );
+
+        db_execute(
+            "INSERT INTO security_final_checks (report_id, decision, remarks, checked_by, checked_at, closed_at)
+             VALUES (?, 'returned', ?, ?, NOW(), NULL)
+             ON DUPLICATE KEY UPDATE decision=VALUES(decision), remarks=VALUES(remarks), checked_by=VALUES(checked_by), checked_at=VALUES(checked_at), closed_at=VALUES(closed_at)",
+            'isi',
+            [$reportId, $remarks, $userId]
+        );
+
+        db_execute(
+            'INSERT INTO report_status_history (report_id, status, changed_by, notes, changed_at) VALUES (?, ?, ?, ?, NOW())',
+            'isis',
+            [$reportId, 'returned_to_department', $userId, $remarks]
+        );
+    }
+}

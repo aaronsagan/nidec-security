@@ -1,0 +1,18 @@
+<?php
+
+class DepartmentActionController
+{
+    public function index(): void
+    {
+        $pageTitle = 'Department Action';
+
+        require_once __DIR__ . '/../../includes/config.php';
+        require_once __DIR__ . '/../../includes/header.php';
+        require_once __DIR__ . '/../../includes/sidebar.php';
+        require_once __DIR__ . '/../../includes/topnav.php';
+
+        require __DIR__ . '/../../views/department/department_action.php';
+
+        require_once __DIR__ . '/../../includes/footer.php';
+    }
+}
